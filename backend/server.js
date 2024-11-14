@@ -3,7 +3,6 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const mysql = require('mysql');
-const useragent = require('express-useragent');
 const compression = require('compression');
 
 dotenv.config();
@@ -31,7 +30,6 @@ const CACHE_DURATION = 5 * 60 * 1000;
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use(useragent.express());
 app.use(compression()); // Compress responses
 app.use(express.static(path.join(_dirname, "/frontend/dist"), {
   maxAge: '1h' // Cache static files for 1 hour
@@ -71,9 +69,13 @@ const optimizeForMobile = (jokes) => {
     id: joke.id,
     title: joke.title,
     content: joke.content.substring(0, 100) + (joke.content.length > 100 ? '...' : ''),
-    // Include only essential fields for mobile
     timestamp: joke.timestamp
   }));
+};
+
+// Function to detect mobile devices using user agent
+const isMobileDevice = (userAgent) => {
+  return /Mobile|iP(hone|od|ad)|Android|BlackBerry|IEMobile|Kindle|NetFront|Silk-Accelerated|(hpw|web)OS|Fennec|Minimo|Opera M(obi|ini)|Blazer|Dolfin|Dolphin|Skyfire|Zune/i.test(userAgent);
 };
 
 // Function to fetch jokes from database
@@ -107,7 +109,7 @@ const fetchJokesFromDB = async (limit = null) => {
 
 // Main route handler for jokes with device detection
 app.get('/post', async (req, res) => {
-  const deviceType = req.useragent.isMobile ? 'mobile' : 'desktop';
+  const deviceType = isMobileDevice(req.headers['user-agent']) ? 'mobile' : 'desktop';
   const page = parseInt(req.query.page) || 1;
   const limit = deviceType === 'mobile' ? 10 : 20; // Fewer items for mobile
   
@@ -208,7 +210,17 @@ app.get('*', (req, res) => {
   res.sendFile(path.resolve(_dirname, "frontend", "dist", "index.html"));
 });
 
+// Explicitly set port for Render.com
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+
+// Start server and listen on all network interfaces
+const server = app.listen(port, '0.0.0.0', () => {
+  console.log(`Server is running on port ${port}`);
+  console.log(`Server is listening on http://0.0.0.0:${port}`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('Server error:', error);
+  process.exit(1);
 });
